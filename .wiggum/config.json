@@ -1,0 +1,31 @@
+{
+  "completion_promise": "WIGGUM_COMPLETE",
+  "backend_verify": [],
+  "frontend_verify": [],
+  "engine": {
+    "name": "codex",
+    "model": "gpt-5.2-codex",
+    "command": [
+      "codex",
+      "exec",
+      "--model",
+      "gpt-5.2-codex",
+      "-c",
+      "model_reasoning_effort=xhigh",
+      "--sandbox",
+      "danger-full-access",
+      "--ask-for-approval",
+      "never"
+    ],
+    "note": "Edit engine.command if your Codex CLI flags differ."
+  },
+  "manual_checks_policy": "allowed-if-justified",
+  "beads": {
+    "parent": "agent-s44",
+    "label_all": [
+      "wiggum"
+    ],
+    "ready_limit": 1,
+    "ready_sort": "hybrid"
+  }
+}
