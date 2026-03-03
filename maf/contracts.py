@@ -68,6 +68,7 @@ class RuntimeConfig:
     model: str = "mock-model"
     max_steps: int = 12
     max_run_seconds: float = 90.0
+    trace_dir: str = ".maf/runs"
     default_tool_timeout_seconds: float = 10.0
     tool_allowlist: list[str] | None = None
     fs_root_path: str = "."

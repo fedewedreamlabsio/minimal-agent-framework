@@ -9,6 +9,7 @@ from .contracts import (
 )
 from .power_tools import build_power_tools
 from .runtime import AgentRuntime
+from .store import JsonlRunStore
 from .tooling import ToolRegistry
 
 __all__ = [
@@ -21,5 +22,6 @@ __all__ = [
     "RuntimeConfig",
     "ToolSpec",
     "ToolRegistry",
+    "JsonlRunStore",
     "build_power_tools",
 ]

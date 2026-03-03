@@ -9,6 +9,7 @@ from typing import Callable
 
 from .contracts import AgentState, JsonDict, LLMAdapter, RunResult, RuntimeConfig, ToolSpec
 from .schema import validate_json
+from .store import JsonlRunStore
 from .tooling import ToolRegistry
 
 
@@ -19,10 +20,12 @@ class AgentRuntime:
         config: RuntimeConfig,
         llm_adapter: LLMAdapter,
         tools: list[ToolSpec] | None = None,
+        store: JsonlRunStore | None = None,
     ) -> None:
         self.config = config
         self.llm_adapter = llm_adapter
         self._tools = ToolRegistry(tools)
+        self.store = store or JsonlRunStore(config.trace_dir)
 
     def run(
         self,
@@ -39,6 +42,19 @@ class AgentRuntime:
             state = AgentState(thread_id=f"thread-{run_id[:8]}")
 
         state.messages.append({"role": "user", "content": input_text})
+        self.store.begin_run(
+            run_id,
+            {
+                "run_id": run_id,
+                "thread_id": state.thread_id,
+                "provider": self.config.provider,
+                "model": self.config.model,
+                "max_steps": self.config.max_steps,
+                "max_run_seconds": self.config.max_run_seconds,
+                "input": input_text,
+            },
+        )
+        self.store.save_state(run_id, state, phase="initial")
 
         def emit(event_type: str, payload: JsonDict) -> None:
             event = {
@@ -48,6 +64,7 @@ class AgentRuntime:
                 "payload": payload,
             }
             trace.append(event)
+            self.store.append_event(run_id, event)
             if event_handler is not None:
                 event_handler(event)
 
@@ -240,6 +257,16 @@ class AgentRuntime:
                 "halt_reason": halt_reason,
                 "final_output": final_output,
                 "message_count": len(state.messages),
+            },
+        )
+        self.store.save_state(run_id, state, phase="final")
+        self.store.finish_run(
+            run_id,
+            {
+                "status": status,
+                "halt_reason": halt_reason,
+                "final_output": final_output,
+                "events": len(trace),
             },
         )
 
