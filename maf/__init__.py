@@ -7,6 +7,7 @@ from .contracts import (
     RuntimeConfig,
     ToolSpec,
 )
+from .power_tools import build_power_tools
 from .runtime import AgentRuntime
 from .tooling import ToolRegistry
 
@@ -20,4 +21,5 @@ __all__ = [
     "RuntimeConfig",
     "ToolSpec",
     "ToolRegistry",
+    "build_power_tools",
 ]

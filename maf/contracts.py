@@ -70,6 +70,9 @@ class RuntimeConfig:
     max_run_seconds: float = 90.0
     default_tool_timeout_seconds: float = 10.0
     tool_allowlist: list[str] | None = None
+    fs_root_path: str = "."
+    http_allowlist: list[str] = field(default_factory=list)
+    kv_store_path: str = ".maf/kv.json"
 
 
 ToolHandler = Callable[[JsonDict, AgentState], JsonDict]
