@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 from typing import Callable
 
 from .contracts import AgentState, JsonDict, LLMAdapter, RunResult, RuntimeConfig, ToolSpec
+from .schema import validate_json
+from .tooling import ToolRegistry
 
 
 class AgentRuntime:
@@ -20,7 +22,7 @@ class AgentRuntime:
     ) -> None:
         self.config = config
         self.llm_adapter = llm_adapter
-        self._tools = {tool.name: tool for tool in (tools or [])}
+        self._tools = ToolRegistry(tools)
 
     def run(
         self,
@@ -96,7 +98,7 @@ class AgentRuntime:
                     run_id=run_id,
                     step_index=step_index,
                     state=state,
-                    tools=list(self._tools.values()),
+                    tools=self._tools.list(),
                     config=self.config,
                 )
                 action = model_result.action
@@ -147,6 +149,20 @@ class AgentRuntime:
                         break
 
                     tool_input = action.tool_input or {}
+                    validation_errors = validate_json(tool_input, tool.input_schema)
+                    if validation_errors:
+                        halt_reason = "tool_input_validation_failed"
+                        emit(
+                            "error",
+                            {
+                                "step": step_index,
+                                "tool_name": tool.name,
+                                "error": "tool input schema validation failed",
+                                "validation_errors": validation_errors,
+                            },
+                        )
+                        break
+
                     emit(
                         "tool_called",
                         {
@@ -169,6 +185,20 @@ class AgentRuntime:
 
                     if tool_error is not None:
                         halt_reason = "tool_failed"
+                        break
+
+                    output_validation_errors = validate_json(tool_result, tool.output_schema)
+                    if output_validation_errors:
+                        halt_reason = "tool_output_validation_failed"
+                        emit(
+                            "error",
+                            {
+                                "step": step_index,
+                                "tool_name": tool.name,
+                                "error": "tool output schema validation failed",
+                                "validation_errors": output_validation_errors,
+                            },
+                        )
                         break
 
                     state.messages.append(

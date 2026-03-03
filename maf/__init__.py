@@ -8,6 +8,7 @@ from .contracts import (
     ToolSpec,
 )
 from .runtime import AgentRuntime
+from .tooling import ToolRegistry
 
 __all__ = [
     "Action",
@@ -18,4 +19,5 @@ __all__ = [
     "RunResult",
     "RuntimeConfig",
     "ToolSpec",
+    "ToolRegistry",
 ]
