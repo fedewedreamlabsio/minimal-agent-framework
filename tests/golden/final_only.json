@@ -1,0 +1,43 @@
+[
+  {
+    "payload": {
+      "input": "scenario:final_only",
+      "max_run_seconds": 3.0,
+      "max_steps": 4,
+      "model": "mock-model",
+      "provider": "mock",
+      "thread_id": "golden-final-only"
+    },
+    "type": "run_started"
+  },
+  {
+    "payload": {
+      "message_count": 1,
+      "step": 0
+    },
+    "type": "model_called"
+  },
+  {
+    "payload": {
+      "action": {
+        "final_output": "done",
+        "internal_note": null,
+        "tool_input": null,
+        "tool_name": null,
+        "type": "final"
+      },
+      "step": 0,
+      "usage": {}
+    },
+    "type": "model_output"
+  },
+  {
+    "payload": {
+      "final_output": "done",
+      "halt_reason": null,
+      "message_count": 2,
+      "status": "completed"
+    },
+    "type": "run_finished"
+  }
+]
