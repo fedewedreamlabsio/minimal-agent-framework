@@ -6,6 +6,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from maf.cli import _resolve_model
+
 
 class CliTests(unittest.TestCase):
     def test_run_trace_replay_flow(self):
@@ -61,6 +63,12 @@ class CliTests(unittest.TestCase):
             replay_proc = subprocess.run(replay_cmd, cwd=repo_root, capture_output=True, text=True, check=True)
             self.assertIn(f"replay_of={run_id}", replay_proc.stdout)
             self.assertIn("status=completed", replay_proc.stdout)
+
+    def test_provider_default_model_resolution(self):
+        self.assertEqual(_resolve_model("mock", None), "mock-model")
+        self.assertEqual(_resolve_model("openai", None), "gpt-4.1-mini")
+        self.assertEqual(_resolve_model("cerebras", None), "zai-glm-4.7")
+        self.assertEqual(_resolve_model("cerebras", "custom-model"), "custom-model")
 
 
 if __name__ == "__main__":

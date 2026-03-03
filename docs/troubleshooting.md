@@ -22,6 +22,28 @@ print('set' if os.getenv('OPENAI_API_KEY') else 'missing')
 PY
 ```
 
+## `CEREBRAS_API_KEY is required for CerebrasChatAdapter`
+
+Cause:
+- Key is missing from environment in current shell.
+
+Fix:
+
+```bash
+set -a
+source .env
+set +a
+```
+
+Verify:
+
+```bash
+python3 - <<'PY'
+import os
+print('set' if os.getenv('CEREBRAS_API_KEY') else 'missing')
+PY
+```
+
 ## `no trace found for run_id=...`
 
 Cause:

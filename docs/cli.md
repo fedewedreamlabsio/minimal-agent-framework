@@ -12,8 +12,8 @@ maf run --input "Hello" --provider mock
 
 Key flags:
 - `--input` required user input.
-- `--provider` `mock|openai`.
-- `--model` model id (`gpt-4.1-mini` default).
+- `--provider` `mock|openai|cerebras`.
+- `--model` model id (provider defaults: `mock-model`, `gpt-4.1-mini`, `zai-glm-4.7`).
 - `--trace-dir` output directory for run artifacts.
 - `--max-steps` step budget.
 - `--max-run-seconds` wall-clock budget.
@@ -62,6 +62,13 @@ OpenAI flow:
 ```bash
 set -a; source .env; set +a
 maf run --provider openai --model gpt-4.1-mini --input "Say hello"
+```
+
+Cerebras flow:
+
+```bash
+set -a; source .env; set +a
+maf run --provider cerebras --model zai-glm-4.7 --input "Say hello"
 ```
 
 Replay flow:

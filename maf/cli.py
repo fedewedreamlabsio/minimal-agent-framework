@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
 from .contracts import RuntimeConfig
-from .llm import MockAdapter, OpenAIChatAdapter, ReplayAdapter
+from .llm import CerebrasChatAdapter, MockAdapter, OpenAIChatAdapter, ReplayAdapter
 from .power_tools import build_power_tools
 from .runtime import AgentRuntime
 from .store import JsonlRunStore, extract_tool_results
@@ -18,8 +19,17 @@ def build_parser() -> argparse.ArgumentParser:
 
     run = sub.add_parser("run", help="Execute an agent run")
     run.add_argument("--input", required=True, help="User input message")
-    run.add_argument("--provider", default="mock", choices=["mock", "openai"], help="LLM provider")
-    run.add_argument("--model", default="gpt-4.1-mini", help="Model identifier")
+    run.add_argument(
+        "--provider",
+        default="mock",
+        choices=["mock", "openai", "cerebras"],
+        help="LLM provider",
+    )
+    run.add_argument(
+        "--model",
+        default=None,
+        help="Model identifier (provider default used if omitted)",
+    )
     run.add_argument("--trace-dir", default=".maf/runs", help="Run trace directory")
     run.add_argument("--max-steps", type=int, default=12)
     run.add_argument("--max-run-seconds", type=float, default=90.0)
@@ -54,9 +64,10 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _cmd_run(args: argparse.Namespace) -> int:
+    resolved_model = _resolve_model(args.provider, args.model)
     config = RuntimeConfig(
         provider=args.provider,
-        model=args.model,
+        model=resolved_model,
         max_steps=args.max_steps,
         max_run_seconds=args.max_run_seconds,
         trace_dir=args.trace_dir,
@@ -65,7 +76,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
         kv_store_path=str(Path(args.trace_dir) / "kv.json"),
     )
 
-    adapter = _build_adapter(args.provider, args.model)
+    adapter = _build_adapter(args.provider, resolved_model)
     tools = [] if args.disable_power_tools else build_power_tools(config)
     runtime = AgentRuntime(config=config, llm_adapter=adapter, tools=tools)
 
@@ -146,6 +157,8 @@ def _build_adapter(provider: str, model: str):
         return MockAdapter()
     if provider == "openai":
         return OpenAIChatAdapter(model=model)
+    if provider == "cerebras":
+        return CerebrasChatAdapter(model=model)
     raise ValueError(f"unsupported provider: {provider}")
 
 
@@ -154,10 +167,22 @@ def _print_event(event: dict[str, object]) -> None:
 
 
 def _parse_csv_allowlist(env_name: str) -> list[str]:
-    raw = str(__import__("os").environ.get(env_name, "")).strip()
+    raw = str(os.environ.get(env_name, "")).strip()
     if not raw:
         return []
     return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+def _resolve_model(provider: str, model: str | None) -> str:
+    if model and model.strip():
+        return model.strip()
+
+    defaults = {
+        "mock": "mock-model",
+        "openai": "gpt-4.1-mini",
+        "cerebras": "zai-glm-4.7",
+    }
+    return defaults.get(provider, "mock-model")
 
 
 if __name__ == "__main__":

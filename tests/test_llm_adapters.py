@@ -5,7 +5,13 @@ import unittest
 
 from maf import Action
 from maf.contracts import AgentState, RuntimeConfig
-from maf.llm import AdapterError, MockAdapter, OpenAIChatAdapter, parse_action_json
+from maf.llm import (
+    AdapterError,
+    CerebrasChatAdapter,
+    MockAdapter,
+    OpenAIChatAdapter,
+    parse_action_json,
+)
 
 
 class ParserTests(unittest.TestCase):
@@ -48,6 +54,18 @@ class OpenAIAdapterTests(unittest.TestCase):
 
         adapter = OpenAIChatAdapter()
         state = AgentState(thread_id="t3", messages=[{"role": "user", "content": "hello"}])
+
+        with self.assertRaises(AdapterError):
+            adapter.complete(run_id="r", step_index=0, state=state, tools=[], config=RuntimeConfig())
+
+
+class CerebrasAdapterTests(unittest.TestCase):
+    def test_cerebras_adapter_requires_key(self):
+        old = os.environ.pop("CEREBRAS_API_KEY", None)
+        self.addCleanup(lambda: os.environ.__setitem__("CEREBRAS_API_KEY", old) if old is not None else None)
+
+        adapter = CerebrasChatAdapter()
+        state = AgentState(thread_id="t4", messages=[{"role": "user", "content": "hello"}])
 
         with self.assertRaises(AdapterError):
             adapter.complete(run_id="r", step_index=0, state=state, tools=[], config=RuntimeConfig())

@@ -7,7 +7,13 @@ from .contracts import (
     RuntimeConfig,
     ToolSpec,
 )
-from .llm import AdapterError, MockAdapter, OpenAIChatAdapter, ReplayAdapter
+from .llm import (
+    AdapterError,
+    CerebrasChatAdapter,
+    MockAdapter,
+    OpenAIChatAdapter,
+    ReplayAdapter,
+)
 from .power_tools import build_power_tools
 from .runtime import AgentRuntime
 from .store import JsonlRunStore
@@ -18,6 +24,7 @@ __all__ = [
     "AdapterError",
     "AgentRuntime",
     "AgentState",
+    "CerebrasChatAdapter",
     "LLMAdapter",
     "MockAdapter",
     "ModelResult",
