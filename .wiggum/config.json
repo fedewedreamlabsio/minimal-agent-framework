@@ -1,6 +1,9 @@
 {
   "completion_promise": "WIGGUM_COMPLETE",
-  "backend_verify": [],
+  "backend_verify": [
+    "python3 -m unittest discover -s tests -v",
+    "python3 scripts/validate_golden_traces.py"
+  ],
   "frontend_verify": [],
   "engine": {
     "name": "codex",
