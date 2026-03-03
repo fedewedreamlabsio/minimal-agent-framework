@@ -36,6 +36,21 @@ maf trace --run-id <run_id>
 
 You can override artifact location with `--trace-dir`.
 
+## `maf perf`
+
+Compute token throughput metrics from persisted trace events.
+
+```bash
+maf perf --run-id <run_id>
+```
+
+Output fields:
+- `completion_tokens`, `prompt_tokens`, `total_tokens`
+- `model_seconds`: sum of per-step model latency (`model_output.ts - model_called.ts`)
+- `wall_seconds`: `run_finished.ts - run_started.ts`
+- `completion_tps_model_time`
+- `completion_tps_wall_time`
+
 ## `maf replay`
 
 Replay prior model actions and tool results from an existing run trace.
@@ -75,4 +90,10 @@ Replay flow:
 
 ```bash
 maf replay --run-id <previous_run_id>
+```
+
+Perf flow:
+
+```bash
+maf perf --run-id <previous_run_id>
 ```

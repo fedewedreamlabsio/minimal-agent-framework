@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime
 import json
 import os
 import sys
@@ -40,6 +41,10 @@ def build_parser() -> argparse.ArgumentParser:
     trace.add_argument("--run-id", required=True)
     trace.add_argument("--trace-dir", default=".maf/runs")
 
+    perf = sub.add_parser("perf", help="Compute token throughput metrics from trace")
+    perf.add_argument("--run-id", required=True)
+    perf.add_argument("--trace-dir", default=".maf/runs")
+
     replay = sub.add_parser("replay", help="Replay a previous run")
     replay.add_argument("--run-id", required=True)
     replay.add_argument("--trace-dir", default=".maf/runs")
@@ -56,6 +61,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_run(args)
     if args.command == "trace":
         return _cmd_trace(args)
+    if args.command == "perf":
+        return _cmd_perf(args)
     if args.command == "replay":
         return _cmd_replay(args)
 
@@ -103,6 +110,26 @@ def _cmd_trace(args: argparse.Namespace) -> int:
         event_type = event.get("type", "unknown")
         payload = event.get("payload", {})
         print(f"[{ts}] {event_type} {json.dumps(payload, sort_keys=True)}")
+    return 0
+
+
+def _cmd_perf(args: argparse.Namespace) -> int:
+    store = JsonlRunStore(args.trace_dir)
+    trace = store.load_trace(args.run_id)
+    if not trace:
+        print(f"no trace found for run_id={args.run_id}", file=sys.stderr)
+        return 1
+
+    metrics = _compute_perf_metrics(trace)
+    print(f"run_id={args.run_id}")
+    print(f"model_calls={metrics['model_calls']}")
+    print(f"completion_tokens={metrics['completion_tokens']}")
+    print(f"prompt_tokens={metrics['prompt_tokens']}")
+    print(f"total_tokens={metrics['total_tokens']}")
+    print(f"model_seconds={metrics['model_seconds']:.6f}")
+    print(f"wall_seconds={metrics['wall_seconds']:.6f}")
+    print(f"completion_tps_model_time={metrics['completion_tps_model_time']:.2f}")
+    print(f"completion_tps_wall_time={metrics['completion_tps_wall_time']:.2f}")
     return 0
 
 
@@ -183,6 +210,74 @@ def _resolve_model(provider: str, model: str | None) -> str:
         "cerebras": "zai-glm-4.7",
     }
     return defaults.get(provider, "mock-model")
+
+
+def _compute_perf_metrics(trace: list[dict[str, object]]) -> dict[str, float | int]:
+    called_by_step: dict[int, datetime] = {}
+    completion_tokens = 0
+    prompt_tokens = 0
+    total_tokens = 0
+    model_latencies: list[float] = []
+    run_started: datetime | None = None
+    run_finished: datetime | None = None
+
+    for event in trace:
+        if not isinstance(event, dict):
+            continue
+        event_type = event.get("type")
+        payload = event.get("payload", {})
+        if not isinstance(payload, dict):
+            payload = {}
+
+        ts_raw = event.get("ts")
+        if not isinstance(ts_raw, str):
+            continue
+
+        try:
+            ts = datetime.fromisoformat(ts_raw)
+        except ValueError:
+            continue
+
+        if event_type == "run_started":
+            run_started = ts
+            continue
+        if event_type == "run_finished":
+            run_finished = ts
+            continue
+        if event_type == "model_called":
+            step = payload.get("step")
+            if isinstance(step, int):
+                called_by_step[step] = ts
+            continue
+        if event_type != "model_output":
+            continue
+
+        usage = payload.get("usage", {})
+        if isinstance(usage, dict):
+            completion_tokens += int(usage.get("completion_tokens") or 0)
+            prompt_tokens += int(usage.get("prompt_tokens") or 0)
+            total_tokens += int(usage.get("total_tokens") or 0)
+
+        step = payload.get("step")
+        if isinstance(step, int) and step in called_by_step:
+            model_latencies.append((ts - called_by_step[step]).total_seconds())
+
+    model_seconds = sum(model_latencies)
+    wall_seconds = (run_finished - run_started).total_seconds() if run_started and run_finished else 0.0
+
+    completion_tps_model = (completion_tokens / model_seconds) if model_seconds > 0 else 0.0
+    completion_tps_wall = (completion_tokens / wall_seconds) if wall_seconds > 0 else 0.0
+
+    return {
+        "model_calls": len(model_latencies),
+        "completion_tokens": completion_tokens,
+        "prompt_tokens": prompt_tokens,
+        "total_tokens": total_tokens,
+        "model_seconds": model_seconds,
+        "wall_seconds": wall_seconds,
+        "completion_tps_model_time": completion_tps_model,
+        "completion_tps_wall_time": completion_tps_wall,
+    }
 
 
 if __name__ == "__main__":

@@ -7,7 +7,7 @@ It is intentionally minimal:
 - Typed tools with schema validation.
 - Persisted traces and state snapshots.
 - Replay from recorded model actions and tool results.
-- A small CLI (`run`, `trace`, `replay`).
+- A small CLI (`run`, `trace`, `replay`, `perf`).
 
 ## Current Scope
 
@@ -73,11 +73,18 @@ maf trace --run-id <run_id>
 maf replay --run-id <run_id>
 ```
 
+### 9. Compute token throughput metrics
+
+```bash
+maf perf --run-id <run_id>
+```
+
 ## CLI Surface
 
 - `maf run`: executes a run and prints `run_id`, status, and final output.
 - `maf trace`: prints persisted trace events for a run.
 - `maf replay`: replays model actions and recorded tool outputs from a prior run.
+- `maf perf`: computes token + latency throughput metrics from trace usage/timestamps.
 
 See full flags and examples in [docs/cli.md](./docs/cli.md).
 
