@@ -32,6 +32,7 @@ class AgentRuntime:
         input_text: str,
         *,
         state: AgentState | None = None,
+        replay_tool_results: list[JsonDict] | None = None,
         event_handler: Callable[[JsonDict], None] | None = None,
     ) -> RunResult:
         run_id = uuid.uuid4().hex
@@ -82,6 +83,7 @@ class AgentRuntime:
 
         halt_reason: str | None = None
         final_output = ""
+        replay_index = 0
 
         try:
             for step_index in range(self.config.max_steps):
@@ -188,8 +190,27 @@ class AgentRuntime:
                             "input": tool_input,
                         },
                     )
+                    replayed = False
+                    if replay_tool_results is not None:
+                        if replay_index >= len(replay_tool_results):
+                            halt_reason = "replay_mismatch"
+                            emit(
+                                "error",
+                                {
+                                    "step": step_index,
+                                    "tool_name": tool.name,
+                                    "error": "replay tool results exhausted",
+                                },
+                            )
+                            break
+                        replay_payload = replay_tool_results[replay_index]
+                        replay_index += 1
+                        tool_result = replay_payload.get("output", {})
+                        tool_error = replay_payload.get("error")
+                        replayed = True
+                    else:
+                        tool_result, tool_error = self._execute_tool(tool, tool_input, state)
 
-                    tool_result, tool_error = self._execute_tool(tool, tool_input, state)
                     emit(
                         "tool_result",
                         {
@@ -197,6 +218,7 @@ class AgentRuntime:
                             "tool_name": tool.name,
                             "output": tool_result,
                             "error": tool_error,
+                            "replayed": replayed,
                         },
                     )
 

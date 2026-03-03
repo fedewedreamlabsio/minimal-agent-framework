@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .contracts import Action, AgentState, JsonDict, ModelResult, RuntimeConfig, ToolSpec
+from .store import extract_model_actions
 
 
 class AdapterError(RuntimeError):
@@ -181,3 +182,30 @@ def _extract_chat_content(response_json: JsonDict) -> str:
     if not isinstance(content, str):
         raise AdapterError("OpenAI response content is not a string")
     return content
+
+
+@dataclass
+class ReplayAdapter:
+    actions: list[Action]
+
+    @classmethod
+    def from_trace(cls, trace: list[JsonDict]) -> "ReplayAdapter":
+        model_actions = extract_model_actions(trace)
+        parsed: list[Action] = []
+        for action in model_actions:
+            parsed.append(action_from_dict(action))
+        return cls(actions=parsed)
+
+    def complete(
+        self,
+        *,
+        run_id: str,
+        step_index: int,
+        state: AgentState,
+        tools: list[ToolSpec],
+        config: RuntimeConfig,
+    ) -> ModelResult:
+        del run_id, step_index, state, tools, config
+        if not self.actions:
+            raise AdapterError("replay adapter exhausted model actions")
+        return ModelResult(action=self.actions.pop(0))
