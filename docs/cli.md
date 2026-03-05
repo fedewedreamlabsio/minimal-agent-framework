@@ -12,8 +12,8 @@ maf run --input "Hello" --provider mock
 
 Key flags:
 - `--input` required user input.
-- `--provider` `mock|openai`.
-- `--model` model id (`gpt-4.1-mini` default).
+- `--provider` `mock|openai|cerebras`.
+- `--model` model id (provider defaults: `mock-model`, `gpt-4.1-mini`, `zai-glm-4.7`).
 - `--trace-dir` output directory for run artifacts.
 - `--max-steps` step budget.
 - `--max-run-seconds` wall-clock budget.
@@ -35,6 +35,21 @@ maf trace --run-id <run_id>
 ```
 
 You can override artifact location with `--trace-dir`.
+
+## `maf perf`
+
+Compute token throughput metrics from persisted trace events.
+
+```bash
+maf perf --run-id <run_id>
+```
+
+Output fields:
+- `completion_tokens`, `prompt_tokens`, `total_tokens`
+- `model_seconds`: sum of per-step model latency (`model_output.ts - model_called.ts`)
+- `wall_seconds`: `run_finished.ts - run_started.ts`
+- `completion_tps_model_time`
+- `completion_tps_wall_time`
 
 ## `maf replay`
 
@@ -64,8 +79,21 @@ set -a; source .env; set +a
 maf run --provider openai --model gpt-4.1-mini --input "Say hello"
 ```
 
+Cerebras flow:
+
+```bash
+set -a; source .env; set +a
+maf run --provider cerebras --model zai-glm-4.7 --input "Say hello"
+```
+
 Replay flow:
 
 ```bash
 maf replay --run-id <previous_run_id>
+```
+
+Perf flow:
+
+```bash
+maf perf --run-id <previous_run_id>
 ```

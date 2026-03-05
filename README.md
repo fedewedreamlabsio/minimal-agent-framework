@@ -7,13 +7,13 @@ It is intentionally minimal:
 - Typed tools with schema validation.
 - Persisted traces and state snapshots.
 - Replay from recorded model actions and tool results.
-- A small CLI (`run`, `trace`, `replay`).
+- A small CLI (`run`, `trace`, `replay`, `perf`).
 
 ## Current Scope
 
 This repository implements the v0.1 MVP described in [PRD.md](./PRD.md):
 - Runtime loop with budgets and halt reasons.
-- Mock and OpenAI adapters.
+- Mock, OpenAI, and Cerebras adapters.
 - Core power tools (`shell.exec`, `fs`, `http.fetch`, `kv.get`, `kv.set`).
 - JSONL trace persistence and replay.
 - Deterministic golden-trace harness.
@@ -37,7 +37,7 @@ pip install -e .
 
 ```bash
 cp .env.example .env
-# edit .env and set OPENAI_API_KEY if using --provider openai
+# edit .env and set OPENAI_API_KEY or CEREBRAS_API_KEY as needed
 set -a
 source .env
 set +a
@@ -55,16 +55,28 @@ maf run --provider mock --input "Summarize this runtime in one line"
 maf run --provider openai --model gpt-4.1-mini --input "Say hello from MAF"
 ```
 
-### 6. Inspect trace
+### 6. Run with Cerebras provider (GLM-4.7)
+
+```bash
+maf run --provider cerebras --model zai-glm-4.7 --input "Say hello from MAF"
+```
+
+### 7. Inspect trace
 
 ```bash
 maf trace --run-id <run_id>
 ```
 
-### 7. Replay a prior run
+### 8. Replay a prior run
 
 ```bash
 maf replay --run-id <run_id>
+```
+
+### 9. Compute token throughput metrics
+
+```bash
+maf perf --run-id <run_id>
 ```
 
 ## CLI Surface
@@ -72,6 +84,7 @@ maf replay --run-id <run_id>
 - `maf run`: executes a run and prints `run_id`, status, and final output.
 - `maf trace`: prints persisted trace events for a run.
 - `maf replay`: replays model actions and recorded tool outputs from a prior run.
+- `maf perf`: computes token + latency throughput metrics from trace usage/timestamps.
 
 See full flags and examples in [docs/cli.md](./docs/cli.md).
 

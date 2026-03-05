@@ -6,7 +6,7 @@ MAF configuration comes from `RuntimeConfig` and select environment variables.
 
 Defined in `maf/contracts.py`.
 
-- `provider`: provider label used for metadata (`mock`, `openai`, `replay`, etc.).
+- `provider`: provider label used for metadata (`mock`, `openai`, `cerebras`, `replay`, etc.).
 - `model`: model name identifier.
 - `max_steps`: max number of loop iterations.
 - `max_run_seconds`: wall-clock run budget.
@@ -20,12 +20,14 @@ Defined in `maf/contracts.py`.
 ## Environment Variables
 
 - `OPENAI_API_KEY`: required for `--provider openai`.
+- `CEREBRAS_API_KEY`: required for `--provider cerebras`.
 - `MAF_HTTP_ALLOWLIST`: comma-separated URL prefixes for `http.fetch`.
 
 Example:
 
 ```bash
 export OPENAI_API_KEY="sk-..."
+export CEREBRAS_API_KEY="csk-..."
 export MAF_HTTP_ALLOWLIST="https://api.github.com,https://httpbin.org"
 ```
 

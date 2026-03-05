@@ -119,6 +119,17 @@ OpenAI-backed adapter using `chat/completions` and JSON action contract.
 Requirements:
 - `OPENAI_API_KEY`
 
+### `CerebrasChatAdapter`
+
+Cerebras-backed adapter using OpenAI-compatible `chat/completions`.
+
+Defaults:
+- endpoint: `https://api.cerebras.ai/v1/chat/completions`
+- model: `zai-glm-4.7`
+
+Requirements:
+- `CEREBRAS_API_KEY`
+
 ### `ReplayAdapter`
 
 Constructed from prior trace:

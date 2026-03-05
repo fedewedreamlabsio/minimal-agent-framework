@@ -101,73 +101,47 @@ class OpenAIChatAdapter:
         if not api_key:
             raise AdapterError("OPENAI_API_KEY is required for OpenAIChatAdapter")
 
-        prompt_payload = {
-            "state": state.as_dict(),
-            "tools": [
-                {
-                    "name": tool.name,
-                    "description": tool.description,
-                    "input_schema": tool.input_schema,
-                }
-                for tool in tools
-            ],
-            "contract": {
-                "instruction": "Reply with JSON action only.",
-                "types": ["final", "tool_call", "continue"],
-                "schema": {
-                    "type": "object",
-                    "required": ["type"],
-                    "properties": {
-                        "type": {"enum": ["final", "tool_call", "continue"]},
-                        "final_output": {"type": "string"},
-                        "tool_name": {"type": "string"},
-                        "tool_input": {"type": "object"},
-                        "internal_note": {"type": "string"},
-                    },
-                },
-            },
-        }
-
-        body = {
-            "model": self.model,
-            "temperature": 0,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": (
-                        "You are an agent policy engine. Output exactly one JSON object that matches "
-                        "the action contract. Do not include prose or markdown."
-                    ),
-                },
-                {"role": "user", "content": json.dumps(prompt_payload, sort_keys=True)},
-            ],
-        }
-
-        request = urllib.request.Request(
-            self.endpoint,
-            data=json.dumps(body).encode("utf-8"),
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            method="POST",
+        return _complete_openai_compatible_chat(
+            provider_name="openai",
+            endpoint=self.endpoint,
+            api_key=api_key,
+            model=self.model,
+            timeout_seconds=self.timeout_seconds,
+            state=state,
+            tools=tools,
         )
 
-        try:
-            with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
-                response_body = response.read().decode("utf-8")
-        except urllib.error.HTTPError as exc:  # pragma: no cover - network-dependent
-            raw = exc.read().decode("utf-8", errors="replace")
-            raise AdapterError(f"openai http error: {exc.code} {raw}") from exc
-        except urllib.error.URLError as exc:  # pragma: no cover - network-dependent
-            raise AdapterError(f"openai connection error: {exc}") from exc
 
-        decoded: JsonDict = json.loads(response_body)
-        content = _extract_chat_content(decoded)
-        action = parse_action_json(content)
-        usage = decoded.get("usage", {}) if isinstance(decoded, dict) else {}
-        usage_dict = usage if isinstance(usage, dict) else {}
-        return ModelResult(action=action, raw_text=content, usage=usage_dict)
+@dataclass
+class CerebrasChatAdapter:
+    model: str = "zai-glm-4.7"
+    timeout_seconds: float = 30.0
+    endpoint: str = "https://api.cerebras.ai/v1/chat/completions"
+    api_key: str | None = None
+
+    def complete(
+        self,
+        *,
+        run_id: str,
+        step_index: int,
+        state: AgentState,
+        tools: list[ToolSpec],
+        config: RuntimeConfig,
+    ) -> ModelResult:
+        del run_id, step_index, config
+        api_key = self.api_key or os.getenv("CEREBRAS_API_KEY")
+        if not api_key:
+            raise AdapterError("CEREBRAS_API_KEY is required for CerebrasChatAdapter")
+
+        return _complete_openai_compatible_chat(
+            provider_name="cerebras",
+            endpoint=self.endpoint,
+            api_key=api_key,
+            model=self.model,
+            timeout_seconds=self.timeout_seconds,
+            state=state,
+            tools=tools,
+        )
 
 
 def _extract_chat_content(response_json: JsonDict) -> str:
@@ -182,6 +156,85 @@ def _extract_chat_content(response_json: JsonDict) -> str:
     if not isinstance(content, str):
         raise AdapterError("OpenAI response content is not a string")
     return content
+
+
+def _complete_openai_compatible_chat(
+    *,
+    provider_name: str,
+    endpoint: str,
+    api_key: str,
+    model: str,
+    timeout_seconds: float,
+    state: AgentState,
+    tools: list[ToolSpec],
+) -> ModelResult:
+    prompt_payload = {
+        "state": state.as_dict(),
+        "tools": [
+            {
+                "name": tool.name,
+                "description": tool.description,
+                "input_schema": tool.input_schema,
+            }
+            for tool in tools
+        ],
+        "contract": {
+            "instruction": "Reply with JSON action only.",
+            "types": ["final", "tool_call", "continue"],
+            "schema": {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                    "type": {"enum": ["final", "tool_call", "continue"]},
+                    "final_output": {"type": "string"},
+                    "tool_name": {"type": "string"},
+                    "tool_input": {"type": "object"},
+                    "internal_note": {"type": "string"},
+                },
+            },
+        },
+    }
+
+    body = {
+        "model": model,
+        "temperature": 0,
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "You are an agent policy engine. Output exactly one JSON object that matches "
+                    "the action contract. Do not include prose or markdown."
+                ),
+            },
+            {"role": "user", "content": json.dumps(prompt_payload, sort_keys=True)},
+        ],
+    }
+
+    request = urllib.request.Request(
+        endpoint,
+        data=json.dumps(body).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
+            response_body = response.read().decode("utf-8")
+    except urllib.error.HTTPError as exc:  # pragma: no cover - network-dependent
+        raw = exc.read().decode("utf-8", errors="replace")
+        raise AdapterError(f"{provider_name} http error: {exc.code} {raw}") from exc
+    except urllib.error.URLError as exc:  # pragma: no cover - network-dependent
+        raise AdapterError(f"{provider_name} connection error: {exc}") from exc
+
+    decoded: JsonDict = json.loads(response_body)
+    content = _extract_chat_content(decoded)
+    action = parse_action_json(content)
+    usage = decoded.get("usage", {}) if isinstance(decoded, dict) else {}
+    usage_dict = usage if isinstance(usage, dict) else {}
+    return ModelResult(action=action, raw_text=content, usage=usage_dict)
 
 
 @dataclass
