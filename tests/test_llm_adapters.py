@@ -10,6 +10,7 @@ from maf.llm import (
     CerebrasChatAdapter,
     MockAdapter,
     OpenAIChatAdapter,
+    action_from_dict,
     parse_action_json,
 )
 
@@ -23,6 +24,16 @@ class ParserTests(unittest.TestCase):
     def test_parse_fenced_json(self):
         action = parse_action_json("```json\n{\"type\":\"continue\"}\n```")
         self.assertEqual(action.type, "continue")
+
+    def test_action_from_dict_infers_tool_call_when_type_missing(self):
+        action = action_from_dict({"tool_name": "fs", "tool_input": {"op": "write"}})
+        self.assertEqual(action.type, "tool_call")
+        self.assertEqual(action.tool_name, "fs")
+
+    def test_action_from_dict_infers_final_when_type_missing(self):
+        action = action_from_dict({"final_output": "done"})
+        self.assertEqual(action.type, "final")
+        self.assertEqual(action.final_output, "done")
 
 
 class MockAdapterTests(unittest.TestCase):

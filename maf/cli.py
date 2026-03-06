@@ -31,6 +31,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Model identifier (provider default used if omitted)",
     )
+    run.add_argument("--endpoint", default=None, help="Override the LLM chat completions endpoint URL")
+    run.add_argument(
+        "--api-key",
+        default=None,
+        help="Override the LLM API key (takes priority over provider env vars)",
+    )
     run.add_argument("--trace-dir", default=".maf/runs", help="Run trace directory")
     run.add_argument("--max-steps", type=int, default=12)
     run.add_argument("--max-run-seconds", type=float, default=90.0)
@@ -83,7 +89,12 @@ def _cmd_run(args: argparse.Namespace) -> int:
         kv_store_path=str(Path(args.trace_dir) / "kv.json"),
     )
 
-    adapter = _build_adapter(args.provider, resolved_model)
+    adapter = _build_adapter(
+        args.provider,
+        resolved_model,
+        endpoint=args.endpoint,
+        api_key=args.api_key,
+    )
     tools = [] if args.disable_power_tools else build_power_tools(config)
     runtime = AgentRuntime(config=config, llm_adapter=adapter, tools=tools)
 
@@ -179,13 +190,27 @@ def _cmd_replay(args: argparse.Namespace) -> int:
     return 0
 
 
-def _build_adapter(provider: str, model: str):
+def _build_adapter(
+    provider: str,
+    model: str,
+    *,
+    endpoint: str | None = None,
+    api_key: str | None = None,
+):
     if provider == "mock":
         return MockAdapter()
+
+    resolved_endpoint = _resolve_endpoint(endpoint)
     if provider == "openai":
-        return OpenAIChatAdapter(model=model)
+        kwargs = {"model": model, "api_key": api_key}
+        if resolved_endpoint is not None:
+            kwargs["endpoint"] = resolved_endpoint
+        return OpenAIChatAdapter(**kwargs)
     if provider == "cerebras":
-        return CerebrasChatAdapter(model=model)
+        kwargs = {"model": model, "api_key": api_key}
+        if resolved_endpoint is not None:
+            kwargs["endpoint"] = resolved_endpoint
+        return CerebrasChatAdapter(**kwargs)
     raise ValueError(f"unsupported provider: {provider}")
 
 
@@ -198,6 +223,16 @@ def _parse_csv_allowlist(env_name: str) -> list[str]:
     if not raw:
         return []
     return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+def _resolve_endpoint(explicit_endpoint: str | None) -> str | None:
+    if explicit_endpoint and explicit_endpoint.strip():
+        return explicit_endpoint.strip()
+
+    base_url = str(os.environ.get("OPENAI_BASE_URL", "")).strip()
+    if not base_url:
+        return None
+    return f"{base_url.rstrip('/')}/chat/completions"
 
 
 def _resolve_model(provider: str, model: str | None) -> str:

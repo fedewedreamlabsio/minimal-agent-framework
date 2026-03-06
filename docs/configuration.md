@@ -20,6 +20,7 @@ Defined in `maf/contracts.py`.
 ## Environment Variables
 
 - `OPENAI_API_KEY`: required for `--provider openai`.
+- `OPENAI_BASE_URL`: optional base URL for OpenAI-compatible endpoints; `maf run` appends `/chat/completions` when `--endpoint` is not set.
 - `CEREBRAS_API_KEY`: required for `--provider cerebras`.
 - `MAF_HTTP_ALLOWLIST`: comma-separated URL prefixes for `http.fetch`.
 
@@ -27,6 +28,7 @@ Example:
 
 ```bash
 export OPENAI_API_KEY="sk-..."
+export OPENAI_BASE_URL="https://api.openai.com/v1"
 export CEREBRAS_API_KEY="csk-..."
 export MAF_HTTP_ALLOWLIST="https://api.github.com,https://httpbin.org"
 ```
