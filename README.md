@@ -1,148 +1,165 @@
 # Minimal Agent Framework (MAF)
 
-MAF is a small, explicit, replayable agent runtime.
+A small, auditable, replayable agent runtime. One loop. Typed tools. Full traces. Nothing else.
 
-It is intentionally minimal:
-- One runtime loop.
-- Typed tools with schema validation.
-- Persisted traces and state snapshots.
-- Replay from recorded model actions and tool results.
-- A small CLI (`run`, `trace`, `replay`, `perf`).
+## Why MAF?
 
-## Current Scope
+Every agent framework wants to be everything. MAF wants to be *understood*.
 
-This repository implements the v0.1 MVP described in [PRD.md](./PRD.md):
-- Runtime loop with budgets and halt reasons.
-- Mock, OpenAI, and Cerebras adapters.
-- Core power tools (`shell.exec`, `fs`, `http.fetch`, `kv.get`, `kv.set`).
-- JSONL trace persistence and replay.
-- Deterministic golden-trace harness.
+- **One runtime loop** — read the source in 15 minutes
+- **Typed tools** with input/output schema validation
+- **JSONL traces** on every run — replay, debug, audit
+- **Any OpenAI-compatible model** — OpenAI, Cerebras, Gemini, Groq, local models
+- **Sandboxed by default** — fs root boundaries, HTTP allowlists, tool allowlists
 
 ## Quickstart
 
-### 1. Prerequisites
-
-- Python `>=3.10`
-- `pip`
-
-### 2. Install
-
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
+python3 -m venv .venv && source .venv/bin/activate
 pip install -e .
 ```
 
-### 3. Configure environment
+### Mock (no API key needed)
 
 ```bash
-cp .env.example .env
-# edit .env and set OPENAI_API_KEY or CEREBRAS_API_KEY as needed
-set -a
-source .env
-set +a
+maf run --provider mock --input "Hello from MAF"
 ```
 
-### 4. Run with mock provider
+### OpenAI
 
 ```bash
-maf run --provider mock --input "Summarize this runtime in one line"
+export OPENAI_API_KEY="sk-..."
+maf run --provider openai --input "List files in the current directory"
 ```
 
-### 5. Run with OpenAI provider
+### Any OpenAI-compatible provider (Gemini, Groq, etc.)
 
 ```bash
-maf run --provider openai --model gpt-4.1-mini --input "Say hello from MAF"
+maf run \
+  --provider openai \
+  --endpoint "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions" \
+  --api-key "$GEMINI_API_KEY" \
+  --model gemini-2.5-flash \
+  --input "List files and summarize what you find"
 ```
 
-### 6. Run with Cerebras provider (GLM-4.7)
+## Real-World Example: Autonomous KPI Analysis
+
+This is how we actually use MAF — delegating a multi-step analytics task that calls external CLIs, processes the results, and writes a report:
 
 ```bash
-maf run --provider cerebras --model zai-glm-4.7 --input "Say hello from MAF"
+maf run \
+  --provider openai \
+  --endpoint "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions" \
+  --api-key "$GEMINI_API_KEY" \
+  --model gemini-2.5-flash \
+  --max-steps 12 \
+  --input 'Gather site traffic data and write a KPI report.
+    Step 1: Run shell command: datafast overview --period 30d --json
+    Step 2: Run shell command: datafast top referrers --period 30d --json
+    Step 3: Write file kpi-report.md with metrics summary and recommendations.
+    Step 4: Return the report as final output.'
 ```
 
-### 7. Inspect trace
+MAF executes each step autonomously — calling `shell.exec`, processing JSON output, writing the report via `fs`, and returning the result. Every step is traced in JSONL.
+
+```
+[09:27:01] run_started    provider=gemini, model=gemini-2.5-flash, max_steps=12
+[09:27:02] tool_called    shell.exec → datafast overview --period 30d --json
+[09:27:03] tool_result    ✓ exit_code=0, 26 visitors, 66.67% bounce rate
+[09:27:05] tool_called    shell.exec → datafast top referrers --period 30d --json
+[09:27:06] tool_result    ✓ exit_code=0, Direct: 16, X: 7, Google: 3
+[09:27:07] tool_called    shell.exec → datafast top pages --period 30d --json
+[09:27:08] tool_result    ✓ exit_code=0, 10 pages returned
+[09:27:20] tool_called    fs.write → kpi-report.md (2,006 bytes)
+[09:27:25] run_finished   status=completed, 5 steps, ~24 seconds
+```
+
+## Built-in Tools
+
+| Tool | Purpose | Safety |
+|------|---------|--------|
+| `shell.exec` | Run shell commands | `cwd` constrained to `fs_root_path` |
+| `fs` | Read, write, list files | Paths must stay under `fs_root_path` |
+| `http.fetch` | HTTP requests | Deny-by-default, URL allowlist required |
+| `kv` | Key-value persistence | File-backed, scoped to run config |
+
+## CLI
 
 ```bash
-maf trace --run-id <run_id>
+maf run      # Execute a run
+maf trace    # Inspect persisted trace events
+maf replay   # Replay a prior run from recorded traces
+maf perf     # Token throughput metrics
 ```
 
-### 8. Replay a prior run
+Key flags for `maf run`:
+- `--provider` — `mock`, `openai`, `cerebras`
+- `--model` — model identifier
+- `--endpoint` — override API endpoint (for OpenAI-compatible providers)
+- `--api-key` — override API key directly
+- `--max-steps` / `--max-run-seconds` — budget controls
+- `--stream-events` — print structured events live
 
-```bash
-maf replay --run-id <run_id>
-```
+See [docs/cli.md](./docs/cli.md) for full reference.
 
-### 9. Compute token throughput metrics
-
-```bash
-maf perf --run-id <run_id>
-```
-
-## CLI Surface
-
-- `maf run`: executes a run and prints `run_id`, status, and final output.
-- `maf trace`: prints persisted trace events for a run.
-- `maf replay`: replays model actions and recorded tool outputs from a prior run.
-- `maf perf`: computes token + latency throughput metrics from trace usage/timestamps.
-
-See full flags and examples in [docs/cli.md](./docs/cli.md).
-
-## Python API (Library Use)
+## Python API
 
 ```python
-from maf import AgentRuntime, RuntimeConfig, MockAdapter, build_power_tools
+from maf import AgentRuntime, RuntimeConfig, OpenAIChatAdapter, build_power_tools
 
-config = RuntimeConfig(provider="mock", model="mock-model", trace_dir=".maf/runs")
-runtime = AgentRuntime(config=config, llm_adapter=MockAdapter(), tools=build_power_tools(config))
-result = runtime.run("Explain what you are")
+config = RuntimeConfig(
+    provider="openai",
+    model="gpt-4.1-mini",
+    max_steps=10,
+    max_run_seconds=60,
+    trace_dir=".maf/runs",
+    fs_root_path="./workspace",
+)
 
-print(result.run_id)
+adapter = OpenAIChatAdapter(model="gpt-4.1-mini")
+tools = build_power_tools(config)
+runtime = AgentRuntime(config=config, llm_adapter=adapter, tools=tools)
+
+result = runtime.run("Read all files and create a summary")
 print(result.final_output)
-print(result.halt_reason)
 ```
 
-## Observability and Artifacts
+## Traces & Replay
 
-By default each run is stored in `<trace_dir>/<run_id>/`:
-- `trace.jsonl`
-- `metadata.json`
-- `state.initial.json`
-- `state.final.json`
+Every run produces artifacts in `<trace_dir>/<run_id>/`:
 
-See [docs/tracing-and-replay.md](./docs/tracing-and-replay.md).
+```
+.maf/runs/4f720ddf/
+├── trace.jsonl          # Every event: model calls, tool results, timing
+├── metadata.json        # Run config, provider, model, budgets
+├── state.initial.json   # Input state snapshot
+└── state.final.json     # Output state snapshot
+```
 
-## Testing and Validation
-
-Run all tests:
+Replay any run deterministically:
 
 ```bash
-python3 -m unittest discover -s tests -v
+maf replay --run-id 4f720ddf
 ```
 
-Run golden trace validator:
+## Testing
 
 ```bash
-python3 scripts/validate_golden_traces.py
+python3 -m pytest tests/ -x     # All tests
+python3 scripts/validate_golden_traces.py  # Golden trace validation
 ```
 
-See [docs/testing.md](./docs/testing.md).
-
-## Documentation Map
+## Docs
 
 - [Architecture](./docs/architecture.md)
-- [API Reference](./docs/api-reference.md)
 - [Configuration](./docs/configuration.md)
-- [CLI Usage](./docs/cli.md)
+- [CLI Reference](./docs/cli.md)
 - [Tool Contracts](./docs/tools.md)
-- [Tracing and Replay](./docs/tracing-and-replay.md)
+- [Tracing & Replay](./docs/tracing-and-replay.md)
 - [Testing](./docs/testing.md)
-- [Cancellation Behavior](./docs/cancellation.md)
-- [Troubleshooting](./docs/troubleshooting.md)
+- [API Reference](./docs/api-reference.md)
 
-## Safety Notes
+## License
 
-- `shell.exec` runs local shell commands. Use `RuntimeConfig.tool_allowlist` if you need stricter control.
-- `fs` operations are restricted to `RuntimeConfig.fs_root_path`.
-- `http.fetch` is deny-by-default unless `MAF_HTTP_ALLOWLIST` is set.
-- `.env` is ignored by git in this repository.
+MIT — see [LICENSE](./LICENSE).
