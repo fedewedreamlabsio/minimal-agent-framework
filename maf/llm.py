@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import urllib.error
@@ -10,6 +11,8 @@ from typing import Any
 
 from .contracts import Action, AgentState, JsonDict, ModelResult, RuntimeConfig, ToolSpec
 from .store import extract_model_actions
+
+logger = logging.getLogger(__name__)
 
 
 class AdapterError(RuntimeError):
@@ -43,7 +46,10 @@ def parse_action_json(text: str) -> Action:
     try:
         parsed = json.loads(candidate)
     except json.JSONDecodeError as exc:
-        raise AdapterError(f"unable to parse action JSON: {exc}") from exc
+        parsed = _parse_repaired_action_json(candidate)
+        if parsed is None:
+            raise AdapterError(f"unable to parse action JSON: {exc}") from exc
+        logger.warning("Recovered malformed action JSON from model output")
 
     if not isinstance(parsed, dict):
         raise AdapterError("parsed action payload must be an object")
@@ -54,6 +60,158 @@ def _strip_code_fences(text: str) -> str:
     pattern = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", flags=re.DOTALL)
     match = pattern.match(text.strip())
     return match.group(1) if match else text
+
+
+def _parse_repaired_action_json(text: str) -> Any | None:
+    for candidate in _iter_repaired_json_candidates(text):
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+    return None
+
+
+def _iter_repaired_json_candidates(text: str):
+    current = _extract_first_json_object(text) or text
+    seen = {text}
+
+    if current not in seen:
+        seen.add(current)
+        yield current
+
+    repaired = _remove_trailing_commas(current)
+    if repaired not in seen:
+        seen.add(repaired)
+        yield repaired
+
+    repaired = _escape_unescaped_string_control_chars(repaired)
+    if repaired not in seen:
+        seen.add(repaired)
+        yield repaired
+
+    repaired = _close_unbalanced_json(repaired)
+    if repaired not in seen:
+        seen.add(repaired)
+        yield repaired
+
+    repaired = _remove_trailing_commas(repaired)
+    if repaired not in seen:
+        seen.add(repaired)
+        yield repaired
+
+
+def _extract_first_json_object(text: str) -> str | None:
+    match = re.search(r"\{", text)
+    if not match:
+        return None
+
+    start = match.start()
+    stack = ["}"]
+    in_string = False
+    escaped = False
+
+    for index in range(start + 1, len(text)):
+        char = text[index]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+
+        if char == '"':
+            in_string = True
+        elif char == "{":
+            stack.append("}")
+        elif char == "[":
+            stack.append("]")
+        elif char in {"}", "]"}:
+            if stack and char == stack[-1]:
+                stack.pop()
+                if not stack:
+                    return text[start : index + 1]
+            else:
+                return text[start:index]
+
+    return text[start:]
+
+
+def _remove_trailing_commas(text: str) -> str:
+    return re.sub(r",(?=\s*[}\]])", "", text)
+
+
+def _escape_unescaped_string_control_chars(text: str) -> str:
+    result: list[str] = []
+    in_string = False
+    escaped = False
+
+    for char in text:
+        if in_string:
+            if escaped:
+                result.append(char)
+                escaped = False
+                continue
+            if char == "\\":
+                result.append(char)
+                escaped = True
+                continue
+            if char == '"':
+                result.append(char)
+                in_string = False
+                continue
+            if char == "\n":
+                result.append("\\n")
+                continue
+            if char == "\r":
+                result.append("\\r")
+                continue
+            if char == "\t":
+                result.append("\\t")
+                continue
+            if ord(char) < 0x20:
+                result.append(f"\\u{ord(char):04x}")
+                continue
+            result.append(char)
+            continue
+
+        result.append(char)
+        if char == '"':
+            in_string = True
+
+    return "".join(result)
+
+
+def _close_unbalanced_json(text: str) -> str:
+    closers: list[str] = []
+    suffix = ""
+    in_string = False
+    escaped = False
+
+    for char in text:
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+
+        if char == '"':
+            in_string = True
+        elif char == "{":
+            closers.append("}")
+        elif char == "[":
+            closers.append("]")
+        elif char in {"}", "]"} and closers and char == closers[-1]:
+            closers.pop()
+
+    if in_string:
+        suffix = '\\"' if escaped else '"'
+
+    return text + suffix + "".join(reversed(closers))
 
 
 @dataclass
