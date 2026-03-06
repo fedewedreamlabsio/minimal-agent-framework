@@ -18,6 +18,11 @@ class AdapterError(RuntimeError):
 
 def action_from_dict(data: JsonDict) -> Action:
     action_type = str(data.get("type", "")).strip()
+    if not action_type:
+        if str(data.get("tool_name", "")).strip():
+            action_type = "tool_call"
+        elif str(data.get("final_output", "")).strip():
+            action_type = "final"
     if action_type not in {"final", "tool_call", "continue"}:
         raise AdapterError(f"invalid action type: {action_type!r}")
 

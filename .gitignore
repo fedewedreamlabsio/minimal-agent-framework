@@ -2,3 +2,6 @@ __pycache__/
 *.pyc
 .maf/
 .env
+minimal_agent_framework.egg-info/
+.venv/
+.maf/

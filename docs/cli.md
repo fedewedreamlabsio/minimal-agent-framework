@@ -14,11 +14,18 @@ Key flags:
 - `--input` required user input.
 - `--provider` `mock|openai|cerebras`.
 - `--model` model id (provider defaults: `mock-model`, `gpt-4.1-mini`, `zai-glm-4.7`).
+- `--endpoint` override the chat completions endpoint URL.
+- `--api-key` override the provider API key directly.
 - `--trace-dir` output directory for run artifacts.
 - `--max-steps` step budget.
 - `--max-run-seconds` wall-clock budget.
 - `--stream-events` print structured events live.
 - `--disable-power-tools` run with no built-in tools.
+
+Endpoint resolution priority for `maf run`:
+- `--endpoint`
+- `OPENAI_BASE_URL` with `/chat/completions` appended
+- provider adapter default
 
 Output format:
 - `run_id=<id>`
@@ -77,6 +84,17 @@ OpenAI flow:
 ```bash
 set -a; source .env; set +a
 maf run --provider openai --model gpt-4.1-mini --input "Say hello"
+```
+
+OpenAI-compatible flow with explicit endpoint and key:
+
+```bash
+maf run \
+  --provider openai \
+  --endpoint "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions" \
+  --api-key "$GEMINI_API_KEY" \
+  --model "gemini-2.0-flash" \
+  --input "Say hello"
 ```
 
 Cerebras flow:

@@ -1,16 +1,61 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-from maf.cli import _resolve_model
+from maf.cli import _build_adapter, _resolve_model
+from maf.llm import CerebrasChatAdapter, OpenAIChatAdapter
+
+
+def _restore_env(name: str, value: str | None) -> None:
+    if value is None:
+        os.environ.pop(name, None)
+        return
+    os.environ[name] = value
 
 
 class CliTests(unittest.TestCase):
+    def test_build_adapter_passes_endpoint_and_api_key_overrides(self):
+        adapter = _build_adapter(
+            "openai",
+            "custom-model",
+            endpoint=" https://example.test/v1/chat/completions ",
+            api_key="test-key",
+        )
+
+        self.assertIsInstance(adapter, OpenAIChatAdapter)
+        self.assertEqual(adapter.endpoint, "https://example.test/v1/chat/completions")
+        self.assertEqual(adapter.api_key, "test-key")
+
+    def test_build_adapter_uses_openai_base_url_when_endpoint_missing(self):
+        old = os.environ.get("OPENAI_BASE_URL")
+        os.environ["OPENAI_BASE_URL"] = "https://example.test/v1/"
+        self.addCleanup(_restore_env, "OPENAI_BASE_URL", old)
+
+        adapter = _build_adapter("openai", "custom-model")
+
+        self.assertIsInstance(adapter, OpenAIChatAdapter)
+        self.assertEqual(adapter.endpoint, "https://example.test/v1/chat/completions")
+
+    def test_build_adapter_prefers_explicit_endpoint_over_openai_base_url(self):
+        old = os.environ.get("OPENAI_BASE_URL")
+        os.environ["OPENAI_BASE_URL"] = "https://env.example.test/v1"
+        self.addCleanup(_restore_env, "OPENAI_BASE_URL", old)
+
+        adapter = _build_adapter(
+            "cerebras",
+            "custom-model",
+            endpoint="https://flag.example.test/chat/completions",
+        )
+
+        self.assertIsInstance(adapter, CerebrasChatAdapter)
+        self.assertEqual(adapter.endpoint, "https://flag.example.test/chat/completions")
+
     def test_run_trace_replay_flow(self):
         repo_root = Path(__file__).resolve().parents[1]
         with tempfile.TemporaryDirectory() as tmp:
