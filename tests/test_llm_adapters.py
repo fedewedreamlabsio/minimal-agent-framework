@@ -25,6 +25,17 @@ class ParserTests(unittest.TestCase):
         action = parse_action_json("```json\n{\"type\":\"continue\"}\n```")
         self.assertEqual(action.type, "continue")
 
+    def test_parse_recovers_malformed_json(self):
+        malformed = 'LLM output:\n{"type":"final","final_output":"line1\nline2","internal_note":"draft",'
+
+        with self.assertLogs("maf.llm", level="WARNING") as logs:
+            action = parse_action_json(malformed)
+
+        self.assertEqual(action.type, "final")
+        self.assertEqual(action.final_output, "line1\nline2")
+        self.assertEqual(action.internal_note, "draft")
+        self.assertIn("Recovered malformed action JSON", logs.output[0])
+
     def test_action_from_dict_infers_tool_call_when_type_missing(self):
         action = action_from_dict({"tool_name": "fs", "tool_input": {"op": "write"}})
         self.assertEqual(action.type, "tool_call")
