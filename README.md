@@ -63,6 +63,10 @@ maf run \
 
 MAF executes each step autonomously — calling `shell.exec`, processing JSON output, writing the report via `fs`, and returning the result. Every step is traced in JSONL.
 
+Related operator writeups:
+- [Datafast CLI for AI Agent Tools: Workflow, Artifacts, Handoffs](https://starkslab.com/notes/ai-developer-tools-datafast-cli-workflow)
+- [SEO CLI for AI Developer Tools: SERPs, Audits, Handoffs](https://starkslab.com/notes/ai-developer-tools-seo-cli-workflow)
+
 ```
 [09:27:01] run_started    provider=gemini, model=gemini-2.5-flash, max_steps=12
 [09:27:02] tool_called    shell.exec → datafast overview --period 30d --json
